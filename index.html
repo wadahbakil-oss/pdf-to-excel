@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>محول PDF إلى Excel - عيادة الأسنان | تحويل الجداول المالية</title>
+    <!-- مكتبات أساسية -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            background: #f0f4f8;
+            font-family: 'Segoe UI', 'Tahoma', 'Cairo', system-ui, sans-serif;
+            margin: 0;
+            padding: 24px 20px;
+            color: #1e2a3e;
+        }
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 32px;
+            box-shadow: 0 20px 35px -12px rgba(0,0,0,0.15);
+            overflow: hidden;
+            padding: 20px 28px 36px;
+        }
+        h1 {
+            font-size: 1.9rem;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            background: linear-gradient(135deg, #0b5e7e, #1e7e6c);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+        .sub {
+            color: #2c6e5c;
+            border-right: 4px solid #2c9b7a;
+            padding-right: 14px;
+            margin-bottom: 30px;
+            font-weight: 500;
+        }
+        .upload-area {
+            background: #f9fbfd;
+            border: 2px dashed #bdd3e8;
+            border-radius: 28px;
+            padding: 32px 24px;
+            text-align: center;
+            transition: 0.2s;
+            cursor: pointer;
+            margin-bottom: 25px;
+        }
+        .upload-area:hover {
+            border-color: #2c9b7a;
+            background: #f1f9f5;
+        }
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin: 20px 0 20px;
+            justify-content: center;
+        }
+        button {
+            background: #1f6e5c;
+            border: none;
+            color: white;
+            font-weight: 600;
+            padding: 12px 28px;
+            border-radius: 44px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            font-family: inherit;
+        }
+        button:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        button.btn-outline {
+            background: white;
+            border: 1.5px solid #1f6e5c;
+            color: #1f6e5c;
+        }
+        button.btn-outline:hover {
+            background: #e0f2ed;
+        }
+        button:hover:not(:disabled) {
+            background: #0e4f41;
+            transform: scale(0.97);
+        }
+        .status {
+            background: #eef2ff;
+            padding: 12px 18px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin: 18px 0;
+            font-family: monospace;
+            word-break: break-word;
+        }
+        .preview-table {
+            overflow-x: auto;
+            max-height: 500px;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            background: #ffffff;
+            margin-top: 25px;
+            font-size: 13px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Courier New', 'Cairo', monospace;
+        }
+        th, td {
+            border: 1px solid #cbd5e1;
+            padding: 8px 10px;
+            text-align: right;
+            vertical-align: top;
+            background-color: white;
+        }
+        th {
+            background: #ebf4f1;
+            position: sticky;
+            top: 0;
+            font-weight: 700;
+        }
+        .badge {
+            background: #d4edda;
+            color: #14532d;
+            padding: 4px 12px;
+            border-radius: 40px;
+            font-size: 0.75rem;
+            display: inline-block;
+        }
+        footer {
+            font-size: 12px;
+            text-align: center;
+            margin-top: 35px;
+            color: #5c6f87;
+        }
+        hr {
+            margin: 20px 0;
+            border-color: #e2edf2;
+        }
+        .file-name {
+            font-weight: bold;
+            color: #0f5b4a;
+        }
+        @media (max-width: 680px) {
+            .container {
+                padding: 16px;
+            }
+            button {
+                padding: 8px 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📄 مُحوِّل PDF ➜ Excel</h1>
+    <div class="sub">✅ خاص بجداول العملاء (مدين، دائن، الرصيد) - دعم كامل للغة العربية والأرقام اليمنية</div>
+    
+    <div class="upload-area" id="dropZone">
+        <div class="upload-icon">📂 📑</div>
+        <div style="font-weight: 500;">اسحب ملف PDF هنا أو انقر للاختيار</div>
+        <div style="font-size: 13px; margin-top: 8px; color: #4f6f8f;">يدعم الملفات مثل: "A_MOVMENT_C_ALL_SUMMERY.pdf" التي تحتوي جداول عملاء</div>
+        <input type="file" id="fileInput" accept=".pdf" style="display: none;">
+    </div>
+    
+    <div class="btn-group">
+        <button id="convertBtn" disabled>🔁 تحويل واستخراج إلى Excel</button>
+        <button id="sampleBtn" class="btn-outline">📂 معاينة ملف تجريبي (مضمّن)</button>
+        <button id="clearBtn" class="btn-outline">🗑 مسح المعاينة</button>
+    </div>
+    
+    <div id="statusMsg" class="status">💡 الحالة: انتظار رفع ملف PDF ...</div>
+    <div id="previewTitle" style="font-weight: 600; margin: 10px 0 5px;">📋 معاينة أول 20 صفاً من البيانات المستخرجة</div>
+    <div class="preview-table" id="tablePreview">
+        <div style="padding: 35px; text-align: center; color: #728197;">✋ سيظهر الجدول المستخلص من PDF بعد التحويل</div>
+    </div>
+    <hr>
+    <div class="badge">⚙️ يعالج جداول العملاء: اسم العميل، مدين، دائن، الرصيد، رقم العميل</div>
+    <footer>ملاحظة: يعتمد على pdf.js لاستخراج النصوص ثم تحليل الجداول بذكاء. مناسب لملفات التقارير المشابهة لعيادة الأسنان / الصيدليات.</footer>
+</div>
+
+<script>
+    // إعدادات PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    
+    let currentPdfData = null;     // تخزين الملف المحول (arrayBuffer)
+    let extractedRows = [];         // مصفوفة الكائنات {客戶名, مدين, دائن, رصيد, رقم العميل, ...}
+    let currentFileName = "";
+    
+    // عناصر DOM
+    const fileInput = document.getElementById('fileInput');
+    const dropZone = document.getElementById('dropZone');
+    const convertBtn = document.getElementById('convertBtn');
+    const sampleBtn = document.getElementById('sampleBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const statusDiv = document.getElementById('statusMsg');
+    const tablePreviewDiv = document.getElementById('tablePreview');
+    const previewTitleSpan = document.getElementById('previewTitle');
+    
+    // ----- دوال مساعدة -----
+    function updateStatus(msg, isError = false) {
+        statusDiv.innerHTML = `📌 ${msg}`;
+        statusDiv.style.background = isError ? '#ffe6e5' : '#e6f7ec';
+    }
+    
+    // تنظيف الأرقام العربية / الإنجليزية وتحويل إلى رقم صافي (للأعداد)
+    function cleanNumber(str) {
+        if (!str || str === '' || str === '-') return 0;
+        // استبدال الأرقام العربية بالفارسية/العربية إلى إنجليزية
+        let cleaned = str.toString().trim();
+        // استبدال الفواصل والأسطر
+        cleaned = cleaned.replace(/,/g, '');  // إزالة فاصلة الآلاف الإنجليزية
+        cleaned = cleaned.replace(/٬/g, '');  // فاصلة آلاف عربية
+        // تحويل الأرقام العربية والهندية إلى أرقام غربية
+        const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+        const englishDigits = '0123456789';
+        let converted = '';
+        for (let ch of cleaned) {
+            const idx = arabicDigits.indexOf(ch);
+            if (idx !== -1) converted += englishDigits[idx];
+            else converted += ch;
+        }
+        // استخراج الرقم السالب أو الموجب
+        let match = converted.match(/-?\d+(?:\.\d+)?/);
+        if (!match) return 0;
+        let num = parseFloat(match[0]);
+        if (isNaN(num)) return 0;
+        return num;
+    }
+    
+    // محاولة استخراج الجداول من نص الـ PDF (مرن للجداول العربية)
+    function parseTablesFromText(fullText) {
+        // التقسيم إلى سطور
+        const lines = fullText.split(/\r?\n/);
+        const candidates = [];
+        // الكشف عن السطور التي تحتوي على أسماء عملاء وأرقام (رقم العميل، اسم العميل، مدين، دائن، الرصيد)
+        // نحن نبحث عن أنماط شائعة: قد تبدأ برقم عميل ثم اسم ثم مبلغين أو ثلاثة.
+        // نمط شائع في الملف: "6 عبدالله المروسي 2,250.00 0.00 2,250.00"
+        // أو "146 لطف محمد قاسم 5,820.00 0.00 5,820.00"
+        // والملف الآخر يحتوي على أعمدة "مدين" "دائن" "الرصيد"
+        const rowRegex = /^\s*(\d+)\s+([\u0600-\u06FF\u0750-\u077F\s\w\.\-]+?)\s+([\d,\.]+|\(?[\d,\.]+\)?)\s+([\d,\.]+|\(?[\d,\.]+\)?)\s+([\d,\.\-]+|\(?[\d,\.\-]+\)?)\s*$/;
+        // بعض الصفوف قد تحتوي على تنسيق مختلف مثل وجود نقاط أو أكثر
+        // أيضاً في الملفات قد يكون "اجمالي مدين" لسطور إجماليات لسنا بحاجة لها.
+        const dataRows = [];
+        
+        for (let line of lines) {
+            line = line.trim();
+            if (line.length < 8) continue;
+            // تخطي سطور الإجماليات الواضحة مثل "اجمالي مدين : 39,870.00" أو "لرصيد الحالي مدين"
+            if (line.includes('اجمالي مدين') || line.includes('اجمالي دائن') || line.includes('لرصيد الحالي') 
+                || line.includes('المدير العام') || line.includes('طبع بواسطة') || line.includes('مدير النظام')
+                || line.includes('صفحة') || line.includes('===== Page')) continue;
+            
+            // محاولة مطابقة النمط: رقم، اسم (متعدد الكلمات العربية)، ثلاث أرقام (مدين، دائن، رصيد)
+            let match = line.match(rowRegex);
+            if (match) {
+                let clientId = match[1].trim();
+                let rawName = match[2].trim();
+                let debitRaw = match[3].trim();
+                let creditRaw = match[4].trim();
+                let balanceRaw = match[5].trim();
+                // تنظيف الأسماء - إزالة أحرف غريبة
+                let cleanName = rawName.replace(/\s+/g, ' ').replace(/[`~!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/g, '');
+                if (cleanName === "") cleanName = rawName;
+                dataRows.push({
+                    "رقم العميل": clientId,
+                    "اسم العميل": cleanName,
+                    "مدين (YER)": cleanNumber(debitRaw),
+                    "دائن (YER)": cleanNumber(creditRaw),
+                    "الرصيد (YER)": cleanNumber(balanceRaw),
+                    "_raw_debit": debitRaw,
+                    "_raw_credit": creditRaw
+                });
+            }
+            else {
+                // بديل: في بعض الأحيان قد لا يطابق العدد الأولي بسبب علامات سالب أو مسافات غير قياسية
+                // ولكن نحاول استخراج صفوف تحتوي على أرقام وأسماء بشكل مرن: تقسيم حسب المسافات
+                let parts = line.split(/\s+/);
+                if (parts.length >= 5) {
+                    // اختبار إن كان أول جزء رقم و ثالث جزء ورابع جزء أرقام وكذلك الخامس قد يكون رقم
+                    let possibleId = parseFloat(parts[0]);
+                    if (!isNaN(possibleId) && parts.length >= 5) {
+                        let maybeDebit = cleanNumber(parts[parts.length-3]);
+                        let maybeCredit = cleanNumber(parts[parts.length-2]);
+                        let maybeBalance = cleanNumber(parts[parts.length-1]);
+                        // اسم العميل هو الأجزاء الوسطى بين الرقم الأول وآخر 3 أرقام
+                        let nameParts = parts.slice(1, parts.length-3);
+                        let name = nameParts.join(' ');
+                        if (name.length > 0 && (maybeDebit !== 0 || maybeCredit !== 0 || maybeBalance !== 0)) {
+                            dataRows.push({
+                                "رقم العميل": parts[0],
+                                "اسم العميل": name.replace(/[`~!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/g, ''),
+                                "مدين (YER)": maybeDebit,
+                                "دائن (YER)": maybeCredit,
+                                "الرصيد (YER)": maybeBalance,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        
+        // إزالة التكرارات بناءً على رقم العميل + الاسم التقريبي (تجنب ازدواجية)
+        const unique = [];
+        const keySet = new Set();
+        for (const row of dataRows) {
+            const key = `${row["رقم العميل"]}|${row["اسم العميل"].substring(0,30)}`;
+            if (!keySet.has(key)) {
+                keySet.add(key);
+                unique.push(row);
+            }
+        }
+        return unique;
+    }
+    
+    // تحويل الصفوف إلى ورقة عمل Excel وتحميلها
+    function exportToExcel(rowsArray, filename = "extracted_clients.xlsx") {
+        if (!rowsArray || rowsArray.length === 0) {
+            updateStatus("⚠️ لا توجد بيانات لتصديرها إلى Excel، حاول بملف آخر يحتوي جداول واضحة.", true);
+            return;
+        }
+        // إضافة صف الإجماليات اختياري
+        const worksheetData = [["رقم العميل", "اسم العميل", "مدين (YER)", "دائن (YER)", "الرصيد (YER)"]];
+        let totalDebit = 0, totalCredit = 0, totalBalance = 0;
+        for (const row of rowsArray) {
+            worksheetData.push([
+                row["رقم العميل"]?.toString() || "",
+                row["اسم العميل"] || "",
+                row["مدين (YER)"] || 0,
+                row["دائن (YER)"] || 0,
+                row["الرصيد (YER)"] || 0
+            ]);
+            totalDebit += (row["مدين (YER)"] || 0);
+            totalCredit += (row["دائن (YER)"] || 0);
+            totalBalance += (row["الرصيد (YER)"] || 0);
+        }
+        // إضافة مجموعات نهائية
+        worksheetData.push(["", "الإجمالي", totalDebit, totalCredit, totalBalance]);
+        
+        const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+        // ضبط عرض الأعمدة
+        ws['!cols'] = [{wch:12},{wch:28},{wch:15},{wch:15},{wch:15}];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "عملاء_تقرير_الحركة");
+        XLSX.writeFile(wb, filename);
+        updateStatus(`✅ تم التصدير بنجاح! تم استخراج ${rowsArray.length} عميل إلى ملف ${filename}`);
+    }
+    
+    // عرض أول 20 صفاً في جدول المعاينة
+    function renderPreview(rows) {
+        if (!rows || rows.length === 0) {
+            tablePreviewDiv.innerHTML = `<div style="padding: 35px; text-align: center;">📭 لا توجد صفوف لعرضها. قد يكون الملف لا يحتوي على جداول بالصيغة المتوقعة.</div>`;
+            return;
+        }
+        const sliceRows = rows.slice(0, 25);
+        let html = `<table dir="rtl"><thead><tr><th>#</th><th>رقم العميل</th><th>اسم العميل</th><th>مدين (YER)</th><th>دائن (YER)</th><th>الرصيد (YER)</th></tr></thead><tbody>`;
+        sliceRows.forEach((row, idx) => {
+            html += `<tr>
+                        <td>${idx+1}</td>
+                        <td>${escapeHtml(row["رقم العميل"] || '')}</td>
+                        <td>${escapeHtml(row["اسم العميل"] || '')}</td>
+                        <td style="text-align:left">${formatNumber(row["مدين (YER)"])}</td>
+                        <td style="text-align:left">${formatNumber(row["دائن (YER)"])}</td>
+                        <td style="text-align:left">${formatNumber(row["الرصيد (YER)"])}</td>
+                     </tr>`;
+        });
+        html += `</tbody></table>`;
+        if (rows.length > 25) html += `<div style="padding:8px; background:#f1f5f9; text-align:center;">+ ${rows.length - 25} صف إضافي (تم عرض أول 25)</div>`;
+        tablePreviewDiv.innerHTML = html;
+    }
+    
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+    
+    function formatNumber(num) {
+        if (typeof num === 'number') return num.toFixed(2);
+        return num;
+    }
+    
+    // الدالة الأساسية لاستخراج البيانات من الـ PDF Buffer
+    async function extractFromPdfBuffer(arrayBuffer, fileNameHint) {
+        try {
+            updateStatus("🔄 جاري تحميل وتحليل ملف PDF... قد يستغرق قليلاً.");
+            const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, disableFontFace: true, useSystemFonts: true });
+            const pdf = await loadingTask.promise;
+            let fullText = "";
+            const maxPages = pdf.numPages;
+            for (let i = 1; i <= maxPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map(item => item.str).join(' ');
+                fullText += pageText + "\n";
+                // إضافة فاصل الأسطر لتسهيل الاكتشاف
+                const strings = textContent.items.map(i => i.str);
+                fullText += strings.join(' ') + "\n";
+            }
+            // تنظيف النص للحصول على أسطر مفهومة: استبدال المسافات المتعددة
+            let cleanedText = fullText.replace(/\s+/g, ' ').replace(/ ([٠-٩0-9\.\,]+) /g, ' $1 ');
+            // محاولة الحفاظ على هيكل الصفوف بإضافة فواصل الأسطر حيث توجد أرقام متتالية
+            const linesFromText = fullText.split(/\n/);
+            let betterText = linesFromText.join('\n');
+            // معالجة إضافية: إزالة الأحرف غير المرغوبة
+            const rows = parseTablesFromText(betterText);
+            if (rows.length === 0) {
+                // محاولة ثانية مع النص المعالج بشكل أقل فضفاضة
+                const secondTry = parseTablesFromText(fullText);
+                if (secondTry.length > 0) {
+                    extractedRows = secondTry;
+                } else {
+                    extractedRows = [];
+                }
+            } else {
+                extractedRows = rows;
+            }
+            
+            if (extractedRows.length === 0) {
+                updateStatus("⚠️ لم يتم العثور على جداول عملاء بهذا التنسيق. تأكد من أن ملف PDF يحتوي على أسماء وأرقام مدين/دائن/رصيد مشابهة للمثال.", true);
+                renderPreview([]);
+                return false;
+            }
+            updateStatus(`✅ نجح الاستخراج! تم العثور على ${extractedRows.length} سجل عميل. يمكنك الآن التصدير إلى Excel.`);
+            renderPreview(extractedRows);
+            return true;
+        } catch (err) {
+            console.error(err);
+            updateStatus(`❌ خطأ أثناء معالجة PDF: ${err.message}`, true);
+            return false;
+        }
+    }
+    
+    // معالجة رفع الملف
+    async function handlePdfFile(file) {
+        if (!file || file.type !== 'application/pdf') {
+            updateStatus("❌ الرجاء اختيار ملف PDF صالح.", true);
+            return false;
+        }
+        currentFileName = file.name.replace(/\.pdf$/i, '');
+        updateStatus(`📁 تم رفع: ${file.name}. جاري القراءة...`);
+        const buffer = await file.arrayBuffer();
+        currentPdfData = buffer;
+        const success = await extractFromPdfBuffer(buffer, file.name);
+        if (success) {
+            convertBtn.disabled = false;
+        } else {
+            convertBtn.disabled = true;
+        }
+        return success;
+    }
+    
+    // معاينة عينة مدمجة من البيانات (محاكاة لبيانات مشابهة للملفات)
+    function loadSampleData() {
+        const sampleRows = [
+            {"رقم العميل":"6","اسم العميل":"عبدالله المروسي","مدين (YER)":2250.00,"دائن (YER)":0,"الرصيد (YER)":2250.00},
+            {"رقم العميل":"12","اسم العميل":"عبدالله الحكيمي","مدين (YER)":3000,"دائن (YER)":3000,"الرصيد (YER)":-3000},
+            {"رقم العميل":"51","اسم العميل":"ناصر العتمي","مدين (YER)":2500,"دائن (YER)":2000,"الرصيد (YER)":2500},
+            {"رقم العميل":"93","اسم العميل":"عبدالله شيبان","مدين (YER)":2400,"دائن (YER)":0,"الرصيد (YER)":2400},
+            {"رقم العميل":"110","اسم العميل":"حسن الطباخ","مدين (YER)":8050,"دائن (YER)":0,"الرصيد (YER)":8050},
+            {"رقم العميل":"146","اسم العميل":"لطف محمد قاسم","مدين (YER)":5820,"دائن (YER)":0,"الرصيد (YER)":5820},
+            {"رقم العميل":"228","اسم العميل":"ام براءه","مدين (YER)":7500,"دائن (YER)":0,"الرصيد (YER)":7500},
+            {"رقم العميل":"311","اسم العميل":"ام محمد ضمانة اختيار","مدين (YER)":3950,"دائن (YER)":0,"الرصيد (YER)":3950},
+            {"رقم العميل":"315","اسم العميل":"محمد نجيب صاحب البطاط","مدين (YER)":5200,"دائن (YER)":0,"الرصيد (YER)":5200}
+        ];
+        extractedRows = sampleRows;
+        renderPreview(extractedRows);
+        updateStatus(`📋 تم تحميل بيانات عينة (${extractedRows.length} عميل) مستوحاة من ملف PDF الأصلي. يمكنك تصديرها إلى Excel.`);
+        convertBtn.disabled = false;
+        currentPdfData = null;
+        currentFileName = "sample_clients";
+    }
+    
+    // تصدير البيانات الحالية إلى إكسل
+    function exportCurrentData() {
+        if (!extractedRows || extractedRows.length === 0) {
+            updateStatus("لا توجد بيانات مستخرجة للتصدير. قم برفع ملف PDF أولا أو استخدم البيانات التجريبية.", true);
+            return;
+        }
+        let filename = currentFileName ? `${currentFileName}_clients.xlsx` : "dental_care_clients.xlsx";
+        exportToExcel(extractedRows, filename);
+    }
+    
+    // ----- أحداث رفع الملف -----
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length) handlePdfFile(e.target.files[0]);
+    });
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#2c9b7a';
+        dropZone.style.background = '#e4f2ef';
+    });
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.style.borderColor = '#bdd3e8';
+        dropZone.style.background = '#f9fbfd';
+    });
+    dropZone.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#bdd3e8';
+        dropZone.style.background = '#f9fbfd';
+        const files = e.dataTransfer.files;
+        if (files.length && files[0].type === 'application/pdf') {
+            await handlePdfFile(files[0]);
+        } else {
+            updateStatus("يرجى إسقاط ملف PDF صالح.", true);
+        }
+    });
+    
+    convertBtn.addEventListener('click', exportCurrentData);
+    sampleBtn.addEventListener('click', loadSampleData);
+    clearBtn.addEventListener('click', () => {
+        extractedRows = [];
+        currentPdfData = null;
+        renderPreview([]);
+        convertBtn.disabled = true;
+        updateStatus("تم مسح المعاينة والبيانات، قم برفع ملف PDF جديد.");
+        fileInput.value = '';
+    });
+    
+    // نهاية
+    updateStatus("جاهز لاستقبال ملف PDF. اسحب ملف 'A_MOVMENT_...' أو أي تقرير عملاء.");
+</script>
+</body>
+</html>
