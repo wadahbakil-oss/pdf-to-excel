@@ -9,7 +9,7 @@
     <style>
         * { box-sizing: border-box; }
         body {
-            background: linear-gradient(135deg, #f5f7fa 0%, #e9edf2 100%);
+            background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
             font-family: 'Cairo', 'Segoe UI', system-ui, sans-serif;
             margin: 0;
             padding: 20px;
@@ -30,7 +30,7 @@
         }
         .header h1 {
             margin: 0 0 8px 0;
-            font-size: 2rem;
+            font-size: 1.8rem;
         }
         .header p {
             margin: 0;
@@ -81,11 +81,10 @@
             transform: none;
         }
         .btn-secondary {
-            background: #e2e8f0;
-            color: #1e293b;
+            background: #475569;
         }
         .btn-secondary:hover {
-            background: #cbd5e1;
+            background: #334155;
         }
         .btn-danger {
             background: #dc2626;
@@ -148,13 +147,20 @@
             border-radius: 20px;
             font-size: 0.75rem;
         }
+        .file-info {
+            background: #eef2ff;
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin-bottom: 16px;
+        }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
         <h1>📄 محول PDF ➜ Excel</h1>
-        <p>لتقارير العملاء - مدين، دائن، الرصيد</p>
+        <p>لتقارير عيادة الأسنان - مدين، دائن، الرصيد</p>
     </div>
     <div class="content">
         <div class="upload-area" id="dropZone">
@@ -171,6 +177,7 @@
         </div>
         
         <div id="statusMsg" class="status">✔️ جاهز لاستقبال ملف PDF</div>
+        <div id="fileInfo" class="file-info" style="display: none;"></div>
         
         <div id="previewContainer">
             <div style="font-weight: 600; margin-bottom: 10px;">📋 معاينة البيانات المستخرجة</div>
@@ -194,66 +201,84 @@
         el.className = `status ${type === 'error' ? 'error' : (type === 'success' ? 'success' : '')}`;
     }
     
-    // تحويل الأرقام العربية
-    function normalizeNumber(str) {
-        if (!str) return 0;
-        const arabic = '٠١٢٣٤٥٦٧٨٩';
-        const persian = '۰۱۲۳۴۵۶۷۸۹';
-        let normalized = str.toString();
+    function toEnglishNumber(str) {
+        if (!str) return "0";
+        const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+        const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
+        let result = str.toString();
         for (let i = 0; i < 10; i++) {
-            normalized = normalized.replace(new RegExp(arabic[i], 'g'), i.toString());
-            normalized = normalized.replace(new RegExp(persian[i], 'g'), i.toString());
+            result = result.replace(new RegExp(arabicDigits[i], 'g'), i.toString());
+            result = result.replace(new RegExp(persianDigits[i], 'g'), i.toString());
         }
-        normalized = normalized.replace(/,/g, '').replace(/٬/g, '');
-        const num = parseFloat(normalized);
+        return result;
+    }
+    
+    function parseNumber(str) {
+        if (!str) return 0;
+        let cleaned = toEnglishNumber(str.trim());
+        cleaned = cleaned.replace(/,/g, '').replace(/٬/g, '');
+        let match = cleaned.match(/-?\d+(?:\.\d+)?/);
+        if (!match) return 0;
+        let num = parseFloat(match[0]);
         return isNaN(num) ? 0 : num;
     }
     
-    // استخراج الجداول بطريقة ذكية تعتمد على البحث عن السطور التي تحتوي أرقاماً
-    function smartTableExtraction(text) {
+    // استخراج البيانات من نص PDF (حتى لو كان يحتوي على HTML)
+    function extractDataFromText(text) {
         const rows = [];
         const lines = text.split(/\r?\n/);
         
-        // البحث عن السطور التي فيها نمط: رقم + اسم + رقم + رقم + رقم
-        for (let line of lines) {
-            line = line.trim();
-            if (line.length < 15) continue;
+        // الحالة 1: البحث عن نمط: رقم العميل + اسم + 3 أرقام (مدين, دائن, رصيد)
+        // هذا النمط موجود في الملف A_MOVMENT_C_ALL_SUMMERY.pdf
+        const pattern1 = /(\d+)\s+([\u0600-\u06FF\u0750-\u077F\s\.\-]+?)\s+([\d,\.\-]+)\s+([\d,\.\-]+)\s+([\d,\.\-]+)/g;
+        
+        let match;
+        while ((match = pattern1.exec(text)) !== null) {
+            let name = match[2].trim();
+            let debit = parseNumber(match[3]);
+            let credit = parseNumber(match[4]);
+            let balance = parseNumber(match[5]);
             
-            // تجاهل سطور الإجماليات والترويسات
-            if (line.includes('اجمالي') || line.includes('الرصيد الحالي') || 
-                line.includes('المدير') || line.includes('صفحة') || line.includes('Page') ||
-                line.includes('مدين') && line.includes('دائن') || line.includes('رقم العميل')) {
-                continue;
+            if (name.length > 0 && name.length < 100 && !name.includes('اجمالي') && !name.includes('الرصيد')) {
+                rows.push({
+                    "رقم العميل": match[1],
+                    "اسم العميل": name,
+                    "مدين (YER)": debit,
+                    "دائن (YER)": credit,
+                    "الرصيد (YER)": balance
+                });
             }
-            
-            // تقسيم السطر إلى أجزاء بالمسافات
-            let parts = line.split(/\s+/);
-            
-            // نحتاج على الأقل 5 أجزاء (رقم، اسم، رقم، رقم، رقم)
-            if (parts.length >= 5) {
-                // محاولة معرفة إذا كان الجزء الأول رقماً
-                let firstPartNum = normalizeNumber(parts[0]);
-                if (firstPartNum > 0 || parts[0] === '0') {
-                    // الأجزاء الثلاثة الأخيرة يجب أن تكون أرقاماً
-                    let lastThree = parts.slice(-3);
-                    let lastThreeNums = lastThree.map(p => normalizeNumber(p));
-                    
-                    // إذا كانت الأرقام الثلاثة الأخيرة أرقاماً صحيحة (أو صفر)
-                    if (lastThreeNums.every(n => !isNaN(n))) {
-                        // الاسم هو كل ما بين الرقم الأول وآخر 3 أجزاء
-                        let nameParts = parts.slice(1, -3);
-                        let name = nameParts.join(' ');
-                        
-                        // تنظيف الاسم من الأحرف غير المرغوب فيها
-                        name = name.replace(/[`~!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/g, '');
-                        if (name.length > 0 && name.length < 100) {
-                            rows.push({
-                                "رقم العميل": parts[0],
-                                "اسم العميل": name,
-                                "مدين (YER)": lastThreeNums[0],
-                                "دائن (YER)": lastThreeNums[1],
-                                "الرصيد (YER)": lastThreeNums[2]
-                            });
+        }
+        
+        // الحالة 2: إذا لم نجد شيئاً، جرب تقسيم السطور مباشرة
+        if (rows.length === 0) {
+            for (let line of lines) {
+                line = line.trim();
+                if (line.length < 15) continue;
+                if (line.includes('اجمالي') || line.includes('الرصيد') || line.includes('Page') || 
+                    line.includes('المدير') || line.includes('تلفون') || line.includes('فاكس')) {
+                    continue;
+                }
+                
+                let parts = line.split(/\s+/);
+                if (parts.length >= 5) {
+                    let firstNum = parseNumber(parts[0]);
+                    if (firstNum > 0 || parts[0] === '0') {
+                        let lastThree = parts.slice(-3);
+                        let nums = lastThree.map(p => parseNumber(p));
+                        if (nums.every(n => !isNaN(n))) {
+                            let nameParts = parts.slice(1, -3);
+                            let name = nameParts.join(' ');
+                            name = name.replace(/[`~!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/g, '');
+                            if (name.length > 0 && name.length < 100 && !name.includes('مدين')) {
+                                rows.push({
+                                    "رقم العميل": parts[0],
+                                    "اسم العميل": name,
+                                    "مدين (YER)": nums[0],
+                                    "دائن (YER)": nums[1],
+                                    "الرصيد (YER)": nums[2]
+                                });
+                            }
                         }
                     }
                 }
@@ -274,7 +299,6 @@
         return unique;
     }
     
-    // معالجة ملف PDF
     async function processPDF(file) {
         if (!file || file.type !== 'application/pdf') {
             showStatus('❌ يرجى اختيار ملف PDF صالح', 'error');
@@ -282,6 +306,8 @@
         }
         
         showStatus(`⏳ جاري معالجة: ${file.name} ...`);
+        document.getElementById('fileInfo').style.display = 'block';
+        document.getElementById('fileInfo').innerHTML = `📄 الملف: ${file.name} | الحجم: ${(file.size / 1024).toFixed(2)} KB`;
         
         try {
             const buffer = await file.arrayBuffer();
@@ -295,44 +321,34 @@
                 allText += strings.join(' ') + '\n';
             }
             
-            // محاولات متعددة للاستخراج
-            let rows = smartTableExtraction(allText);
+            // محاولة استخراج البيانات
+            let rows = extractDataFromText(allText);
             
-            // إذا لم نجد شيئاً، جرب بتقسيم النص بشكل مختلف
+            // إذا لم نجد بيانات، جرب معالجة النص الخام بدون تنظيف
             if (rows.length === 0) {
-                // جرب البحث عن أرقام العملاء المباشرة
-                const clientPattern = /(\d+)\s+([\u0600-\u06FF\u0750-\u077F\s]+?)\s+([\d\.\,]+)\s+([\d\.\,]+)\s+([\d\.\,-]+)/g;
-                let match;
-                while ((match = clientPattern.exec(allText)) !== null) {
-                    rows.push({
-                        "رقم العميل": match[1],
-                        "اسم العميل": match[2].trim(),
-                        "مدين (YER)": normalizeNumber(match[3]),
-                        "دائن (YER)": normalizeNumber(match[4]),
-                        "الرصيد (YER)": normalizeNumber(match[5])
-                    });
-                }
+                const rawText = allText.replace(/\s+/g, ' ');
+                rows = extractDataFromText(rawText);
             }
             
             if (rows.length === 0) {
-                showStatus('⚠️ لم يتم العثور على بيانات جدولية. تأكد أن ملف PDF يحتوي على أرقام عملاء ومبالغ.', 'error');
-                document.getElementById('tablePreview').innerHTML = '<div style="padding: 50px; text-align: center;">❌ لم يتم العثور على جداول في هذا الملف</div>';
+                showStatus('⚠️ لم يتم العثور على بيانات جدولية في هذا الملف', 'error');
+                document.getElementById('tablePreview').innerHTML = '<div style="padding: 50px; text-align: center;">❌ لم يتم العثور على جداول عملاء في هذا الملف</div>';
                 document.getElementById('statsArea').style.display = 'none';
+                document.getElementById('convertBtn').disabled = true;
                 return false;
             }
             
             currentRows = rows;
             currentFile = file.name.replace(/\.pdf$/i, '');
             
-            // عرض المعاينة
             displayPreview(rows);
             showStatus(`✅ تم استخراج ${rows.length} سجل بنجاح!`, 'success');
             document.getElementById('convertBtn').disabled = false;
             
-            // عرض إحصائيات
             const totalDebit = rows.reduce((s, r) => s + r["مدين (YER)"], 0);
             const totalCredit = rows.reduce((s, r) => s + r["دائن (YER)"], 0);
-            document.getElementById('statsArea').innerHTML = `📊 إجمالي المدين: ${totalDebit.toFixed(2)} | إجمالي الدائن: ${totalCredit.toFixed(2)} | عدد العملاء: ${rows.length}`;
+            const totalBalance = rows.reduce((s, r) => s + r["الرصيد (YER)"], 0);
+            document.getElementById('statsArea').innerHTML = `📊 إجمالي المدين: ${totalDebit.toFixed(2)} | إجمالي الدائن: ${totalCredit.toFixed(2)} | إجمالي الرصيد: ${totalBalance.toFixed(2)} | عدد العملاء: ${rows.length}`;
             document.getElementById('statsArea').style.display = 'flex';
             
             return true;
@@ -355,20 +371,20 @@
         html += '<th>#</th><th>رقم العميل</th><th>اسم العميل</th><th>مدين (YER)</th><th>دائن (YER)</th><th>الرصيد (YER)</th>';
         html += '</tr></thead><tbody>';
         
-        rows.slice(0, 30).forEach((row, idx) => {
+        rows.slice(0, 50).forEach((row, idx) => {
             html += `<tr>
                         <td>${idx + 1}</td>
                         <td>${escapeHtml(row["رقم العميل"])}</td>
                         <td>${escapeHtml(row["اسم العميل"])}</td>
-                        <td style="text-align:left">${row["مدين (YER)"].toFixed(2)}</td>
-                        <td style="text-align:left">${row["دائن (YER)"].toFixed(2)}</td>
-                        <td style="text-align:left">${(row["الرصيد (YER)"]).toFixed(2)}</td>
+                        <td style="text-align:left">${row["مدين (YER)"].toLocaleString()}</td>
+                        <td style="text-align:left">${row["دائن (YER)"].toLocaleString()}</td>
+                        <td style="text-align:left">${row["الرصيد (YER)"].toLocaleString()}</td>
                      </tr>`;
         });
         
         html += '</tbody></table>';
-        if (rows.length > 30) {
-            html += `<div style="padding: 12px; background: #f8fafc; text-align: center;">+ ${rows.length - 30} صف إضافي</div>`;
+        if (rows.length > 50) {
+            html += `<div style="padding: 12px; background: #f8fafc; text-align: center;">+ ${rows.length - 50} صف إضافي</div>`;
         }
         container.innerHTML = html;
     }
@@ -390,7 +406,7 @@
         }
         
         const sheetData = [["رقم العميل", "اسم العميل", "مدين (YER)", "دائن (YER)", "الرصيد (YER)"]];
-        let totalDebit = 0, totalCredit = 0;
+        let totalDebit = 0, totalCredit = 0, totalBalance = 0;
         
         for (let row of currentRows) {
             sheetData.push([
@@ -402,15 +418,16 @@
             ]);
             totalDebit += row["مدين (YER)"];
             totalCredit += row["دائن (YER)"];
+            totalBalance += row["الرصيد (YER)"];
         }
         
-        sheetData.push(["", "المجموع", totalDebit, totalCredit, totalDebit - totalCredit]);
+        sheetData.push(["", "الإجمالي", totalDebit, totalCredit, totalBalance]);
         
         const ws = XLSX.utils.aoa_to_sheet(sheetData);
-        ws['!cols'] = [{wch:10}, {wch:35}, {wch:14}, {wch:14}, {wch:14}];
+        ws['!cols'] = [{wch:12}, {wch:35}, {wch:16}, {wch:16}, {wch:16}];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "العملاء");
-        XLSX.writeFile(wb, `${currentFile || "report"}_clients.xlsx`);
+        XLSX.writeFile(wb, `${currentFile || "report"}_clients_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.xlsx`);
         
         showStatus(`✅ تم التصدير! تم حفظ ${currentRows.length} عميل`, 'success');
     }
@@ -421,14 +438,21 @@
             {"رقم العميل":"12","اسم العميل":"عبدالله الحكيمي","مدين (YER)":3000,"دائن (YER)":3000,"الرصيد (YER)":-3000},
             {"رقم العميل":"51","اسم العميل":"ناصر العتمي","مدين (YER)":2500,"دائن (YER)":2000,"الرصيد (YER)":2500},
             {"رقم العميل":"93","اسم العميل":"عبدالله شيبان","مدين (YER)":2400,"دائن (YER)":0,"الرصيد (YER)":2400},
-            {"رقم العميل":"110","اسم العميل":"حسن الطباخ","مدين (YER)":8050,"دائن (YER)":0,"الرصيد (YER)":8050}
+            {"رقم العميل":"110","اسم العميل":"حسن الطباخ","مدين (YER)":8050,"دائن (YER)":0,"الرصيد (YER)":8050},
+            {"رقم العميل":"146","اسم العميل":"لطف محمد قاسم","مدين (YER)":5820,"دائن (YER)":0,"الرصيد (YER)":5820},
+            {"رقم العميل":"228","اسم العميل":"ام براءه","مدين (YER)":7500,"دائن (YER)":0,"الرصيد (YER)":7500},
+            {"رقم العميل":"311","اسم العميل":"ام محمد ضمانة اختيار","مدين (YER)":3950,"دائن (YER)":0,"الرصيد (YER)":3950},
+            {"رقم العميل":"315","اسم العميل":"محمد نجيب صاحب البطاط","مدين (YER)":5200,"دائن (YER)":0,"الرصيد (YER)":5200},
+            {"رقم العميل":"322","اسم العميل":"مروان سيف","مدين (YER)":200,"دائن (YER)":0,"الرصيد (YER)":200}
         ];
         currentFile = "sample_data";
         displayPreview(currentRows);
-        showStatus(`📋 تم تحميل ${currentRows.length} سجل تجريبي`, 'success');
+        showStatus(`📋 تم تحميل ${currentRows.length} سجل تجريبي (محاكاة للملف الأول)`, 'success');
         document.getElementById('convertBtn').disabled = false;
-        document.getElementById('statsArea').innerHTML = `📊 إجمالي المدين: 18200 | إجمالي الدائن: 5000 | عدد العملاء: 5`;
+        document.getElementById('statsArea').innerHTML = `📊 إجمالي المدين: 38270 | إجمالي الدائن: 5000 | عدد العملاء: ${currentRows.length}`;
         document.getElementById('statsArea').style.display = 'flex';
+        document.getElementById('fileInfo').style.display = 'block';
+        document.getElementById('fileInfo').innerHTML = `📋 بيانات تجريبية مستوحاة من ملف A_MOVMENT_C_ALL_SUMMERY.pdf`;
     }
     
     function clearAll() {
@@ -436,6 +460,7 @@
         currentFile = "";
         document.getElementById('tablePreview').innerHTML = '<div style="padding: 50px; text-align: center;">📭 تم المسح، اختر ملف PDF جديد</div>';
         document.getElementById('statsArea').style.display = 'none';
+        document.getElementById('fileInfo').style.display = 'none';
         document.getElementById('convertBtn').disabled = true;
         document.getElementById('fileInput').value = '';
         showStatus('🗑️ تم مسح جميع البيانات. يمكنك الآن رفع ملف جديد.', 'info');
