@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>محول بيانات العملاء - عيادة الأسنان</title>
+    <title>تحويل جدول Word إلى Excel - عيادة الأسنان</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <style>
         * { box-sizing: border-box; }
@@ -11,10 +11,9 @@
             font-family: 'Cairo', 'Segoe UI', system-ui;
             background: linear-gradient(135deg, #f0f4f8, #e2e8f0);
             padding: 20px;
-            min-height: 100vh;
         }
         .container {
-            max-width: 1300px;
+            max-width: 1400px;
             margin: 0 auto;
             background: white;
             border-radius: 32px;
@@ -26,28 +25,19 @@
             color: white;
             padding: 28px 32px;
         }
-        .header h1 { margin: 0 0 8px; font-size: 1.8rem; }
-        .header p { opacity: 0.9; margin: 0; }
+        .header h1 { margin: 0; font-size: 1.8rem; }
+        .header p { margin: 8px 0 0; opacity: 0.9; }
         .content { padding: 32px; }
-        .info-box {
-            background: #e0f2fe;
-            border-right: 4px solid #0284c7;
-            padding: 16px 20px;
-            border-radius: 16px;
-            margin-bottom: 24px;
-        }
-        .info-box h3 { margin: 0 0 8px; color: #0369a1; }
-        .info-box p { margin: 0; color: #0c4a6e; }
-        .method {
+        .method-box {
             background: #f8fafc;
-            border-radius: 20px;
+            border-radius: 24px;
             padding: 24px;
             margin-bottom: 24px;
             border: 1px solid #e2e8f0;
         }
-        .method h3 {
+        .method-box h3 {
             margin: 0 0 16px;
-            color: #1e293b;
+            color: #0a3c32;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -89,7 +79,6 @@
         .btn-blue { background: #2563eb; }
         .btn-blue:hover { background: #1d4ed8; }
         .btn-gray { background: #64748b; }
-        .btn-red { background: #dc2626; }
         .preview-table {
             overflow-x: auto;
             max-height: 500px;
@@ -115,68 +104,53 @@
         .stats {
             margin-top: 16px;
             padding: 12px 16px;
-            background: #f8fafc;
-            border-radius: 12px;
-        }
-        .badge {
             background: #dcfce7;
+            border-radius: 12px;
             color: #166534;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            display: inline-block;
         }
-        hr { margin: 24px 0; }
+        .info {
+            background: #e0f2fe;
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border-right: 4px solid #0284c7;
+        }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <h1>📄 محول بيانات العملاء إلى Excel</h1>
-        <p>لعيادة الأسنان - تعز</p>
+        <h1>📄 تحويل جدول Word إلى Excel</h1>
+        <p>خاص بملفات عيادة الأسنان - تعز</p>
     </div>
     <div class="content">
-        <div class="info-box">
-            <h3>⚠️ ملاحظة مهمة</h3>
-            <p>ملفات PDF الخاصة بك تحتوي على نص مشفر. استخدم إحدى الطريقتين التاليتين لاستخراج البيانات:</p>
+        <div class="info">
+            💡 <strong>طريقة الاستخدام:</strong><br>
+            1. افتح ملف Word<br>
+            2. حدد الجدول بالكامل (Ctrl+A داخل الجدول)<br>
+            3. انسخ (Ctrl+C)<br>
+            4. الصق في المربع أدناه (Ctrl+V)<br>
+            5. اضغط "تحويل البيانات"
         </div>
 
-        <!-- الطريقة الأولى: نسخ ولصق -->
-        <div class="method">
-            <h3>📋 الطريقة الأولى: نسخ البيانات من PDF ولصقها</h3>
-            <p style="margin-bottom: 16px; color: #475569;">افتح ملف PDF في Adobe Reader أو أي قارئ PDF، حدد الجدول بالكامل (Ctrl+A)، ثم انسخه (Ctrl+C) والصقه هنا:</p>
-            <textarea id="rawDataInput" placeholder="الصق البيانات هنا... مثال:
-6 عبدالله المروسي 2,250.00 0.00 2,250.00
-12 عبدالله الحكيمي 3,000.00 3,000.00 -3,000.00
-51 ناصر العتمي 2,500.00 2,000.00 2,500.00"></textarea>
-            <div class="btn-group">
-                <button id="processPasteBtn" class="btn-blue">🔄 تحليل البيانات</button>
-                <button id="clearPasteBtn" class="btn-gray">🗑 مسح</button>
-            </div>
-        </div>
+        <div class="method-box">
+            <h3>📋 الصق الجدول هنا</h3>
+            <textarea id="pasteArea" placeholder="بعد نسخ الجدول من Word، الصقه هنا...
 
-        <hr>
-
-        <!-- الطريقة الثانية: إدخال يدوي -->
-        <div class="method">
-            <h3>✏️ الطريقة الثانية: إدخال البيانات يدوياً</h3>
-            <p style="margin-bottom: 16px; color: #475569;">أدخل البيانات بهذا التنسيق (كل عميل في سطر جديد، مفصول بمسافات):</p>
-            <p class="badge">التنسيق: رقم_العميل اسم_العميل المبلغ_المدين المبلغ_الدائن الرصيد</p>
-            <textarea id="manualDataInput" placeholder="مثال:
-6 عبدالله المروسي 2250 0 2250
-12 عبدالله الحكيمي 3000 3000 -3000
-51 ناصر العتمي 2500 2000 2500"></textarea>
+مثال للبيانات المتوقعة:
+3	فيصل الوصابي	28,810.00	28,880.00	-70.00
+2	فهمي أنور	42,350.00	42,350.00	0.00
+4	ادم احمد العده	749,501.90	718,205.00	31,296.90"></textarea>
             <div class="btn-group">
-                <button id="processManualBtn" class="btn-blue">📊 تحميل وعرض</button>
+                <button id="convertBtn" class="btn-blue">🔄 تحويل البيانات إلى جدول</button>
                 <button id="exportBtn" disabled>📎 تصدير إلى Excel</button>
-                <button id="clearManualBtn" class="btn-gray">🗑 مسح</button>
+                <button id="clearBtn" class="btn-gray">🗑 مسح</button>
             </div>
         </div>
 
-        <!-- معاينة البيانات -->
-        <h3 style="margin-top: 24px;">📋 معاينة البيانات</h3>
+        <h3>📋 معاينة البيانات المستخرجة</h3>
         <div class="preview-table" id="tablePreview">
-            <div style="padding: 50px; text-align: center; color: #94a3b8;">سيظهر الجدول هنا بعد تحليل البيانات</div>
+            <div style="padding: 50px; text-align: center; color: #94a3b8;">سيظهر الجدول هنا بعد التحويل</div>
         </div>
         <div id="statsArea" class="stats" style="display: none;"></div>
     </div>
@@ -185,54 +159,62 @@
 <script>
     let currentData = [];
     
-    function parseAndDisplay(inputText) {
-        const lines = inputText.split(/\r?\n/);
+    // تحويل الأرقام من النص
+    function parseNumber(str) {
+        if (!str) return 0;
+        let cleaned = str.toString().replace(/,/g, '').replace(/٬/g, '');
+        let num = parseFloat(cleaned);
+        return isNaN(num) ? 0 : num;
+    }
+    
+    // تحليل النص الملصق
+    function parsePastedText(text) {
+        const lines = text.split(/\r?\n/);
         const clients = [];
         
         for (let line of lines) {
             line = line.trim();
             if (line.length < 10) continue;
             
-            // تقسيم السطر إلى أجزاء
+            // تقسيم حسب المسافات أو التبويبات
             let parts = line.split(/\s+/);
             
-            // يجب أن يحتوي السطر على 5 أجزاء على الأقل
+            // تنسيق Word عادة: رقم | اسم | مدين | دائن | رصيد
             if (parts.length >= 5) {
-                let clientId = parts[0];
-                let name = parts[1];
-                let debit = parseFloat(parts[2].replace(/,/g, '')) || 0;
-                let credit = parseFloat(parts[3].replace(/,/g, '')) || 0;
-                let balance = parseFloat(parts[4].replace(/,/g, '')) || 0;
+                let clientId = parts[0].trim();
+                let name = parts[1].trim();
+                let debit = parseNumber(parts[2]);
+                let credit = parseNumber(parts[3]);
+                let balance = parseNumber(parts[4]);
                 
-                // إذا كان الرصيد غير موجود، احسبه
-                if (parts.length >= 5 && isNaN(balance)) {
-                    balance = debit - credit;
+                // التحقق من صحة البيانات
+                if (clientId && name && name.length > 1 && name.length < 80) {
+                    clients.push({
+                        "رقم العميل": clientId,
+                        "اسم العميل": name,
+                        "مدين (YER)": debit,
+                        "دائن (YER)": credit,
+                        "الرصيد (YER)": balance
+                    });
                 }
-                
-                clients.push({
-                    "رقم العميل": clientId,
-                    "اسم العميل": name,
-                    "مدين (YER)": debit,
-                    "دائن (YER)": credit,
-                    "الرصيد (YER)": balance
-                });
             }
-            // بعض الأسماء قد تحتوي على مسافات (مثل "ام محمد")
+            // بعض الأسماء قد تحتوي على مسافات (مثل "عيادة الرضوان")
             else if (parts.length >= 5) {
-                // محاولة استخراج الاسم بشكل أفضل
+                // محاولة استخراج أفضل
                 let clientId = parts[0];
                 let nameParts = [];
-                let debit = 0, credit = 0, balance = 0;
+                let debit, credit, balance;
                 
+                // الاسم هو الأجزاء الوسطى
                 for (let i = 1; i < parts.length - 3; i++) {
                     nameParts.push(parts[i]);
                 }
                 let name = nameParts.join(' ');
-                debit = parseFloat(parts[parts.length - 3].replace(/,/g, '')) || 0;
-                credit = parseFloat(parts[parts.length - 2].replace(/,/g, '')) || 0;
-                balance = parseFloat(parts[parts.length - 1].replace(/,/g, '')) || 0;
+                debit = parseNumber(parts[parts.length - 3]);
+                credit = parseNumber(parts[parts.length - 2]);
+                balance = parseNumber(parts[parts.length - 1]);
                 
-                if (name.length > 0) {
+                if (clientId && name && name.length > 1) {
                     clients.push({
                         "رقم العميل": clientId,
                         "اسم العميل": name,
@@ -296,6 +278,24 @@
         return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : (m === '<' ? '&lt;' : '&gt;'));
     }
     
+    function convertData() {
+        const text = document.getElementById('pasteArea').value;
+        if (!text.trim()) {
+            alert("الرجاء لصق البيانات أولاً");
+            return;
+        }
+        
+        const data = parsePastedText(text);
+        if (data.length === 0) {
+            alert("لم يتم العثور على بيانات صالحة. تأكد من أنك نسخت الجدول بشكل صحيح من Word");
+            return;
+        }
+        
+        currentData = data;
+        displayTable(data);
+        document.getElementById('exportBtn').disabled = false;
+    }
+    
     function exportToExcel() {
         if (!currentData || currentData.length === 0) {
             alert("لا توجد بيانات للتصدير");
@@ -321,50 +321,8 @@
         XLSX.writeFile(wb, `clients_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.xlsx`);
     }
     
-    // معالجة النص الملصق
-    function processPaste() {
-        const text = document.getElementById('rawDataInput').value;
-        if (!text.trim()) {
-            alert("الرجاء لصق البيانات أولاً");
-            return;
-        }
-        
-        const data = parseAndDisplay(text);
-        if (data.length === 0) {
-            alert("لم يتم العثور على بيانات صالحة. تأكد من التنسيق: رقم العميل اسم العميل مدين دائن رصيد");
-            return;
-        }
-        
-        currentData = data;
-        displayTable(data);
-        document.getElementById('exportBtn').disabled = false;
-    }
-    
-    // معالجة الإدخال اليدوي
-    function processManual() {
-        const text = document.getElementById('manualDataInput').value;
-        if (!text.trim()) {
-            alert("الرجاء إدخال البيانات");
-            return;
-        }
-        
-        const data = parseAndDisplay(text);
-        if (data.length === 0) {
-            alert("لم يتم العثور على بيانات صالحة. التنسيق المطلوب: رقم_العميل اسم_العميل المبلغ_المدين المبلغ_الدائن الرصيد");
-            return;
-        }
-        
-        currentData = data;
-        displayTable(data);
-        document.getElementById('exportBtn').disabled = false;
-    }
-    
-    function clearPaste() {
-        document.getElementById('rawDataInput').value = '';
-    }
-    
-    function clearManual() {
-        document.getElementById('manualDataInput').value = '';
+    function clearAll() {
+        document.getElementById('pasteArea').value = '';
         currentData = [];
         document.getElementById('tablePreview').innerHTML = '<div style="padding: 50px; text-align: center;">📭 تم المسح</div>';
         document.getElementById('statsArea').style.display = 'none';
@@ -372,11 +330,9 @@
     }
     
     // الأحداث
-    document.getElementById('processPasteBtn').addEventListener('click', processPaste);
-    document.getElementById('processManualBtn').addEventListener('click', processManual);
+    document.getElementById('convertBtn').addEventListener('click', convertData);
     document.getElementById('exportBtn').addEventListener('click', exportToExcel);
-    document.getElementById('clearPasteBtn').addEventListener('click', clearPaste);
-    document.getElementById('clearManualBtn').addEventListener('click', clearManual);
+    document.getElementById('clearBtn').addEventListener('click', clearAll);
 </script>
 </body>
 </html>
