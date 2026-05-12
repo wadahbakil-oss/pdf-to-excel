@@ -3,18 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>محول PDF إلى Excel - النسخة النهائية</title>
-    <!-- PDF.js -->
+    <title>محول PDF إلى Excel - خاص بعيادة الأسنان</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-    <!-- SheetJS -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <style>
         * { box-sizing: border-box; }
         body {
             background: linear-gradient(135deg, #f0f4f8, #e2e8f0);
-            font-family: 'Cairo', 'Segoe UI', system-ui, sans-serif;
+            font-family: 'Cairo', 'Segoe UI', system-ui;
             padding: 20px;
-            min-height: 100vh;
         }
         .container {
             max-width: 1400px;
@@ -57,7 +54,6 @@
             border-radius: 40px;
             font-size: 0.95rem;
             cursor: pointer;
-            transition: 0.2s;
         }
         button:hover { background: #0e5e48; transform: translateY(-1px); }
         button:disabled { background: #94a3b8; cursor: not-allowed; }
@@ -103,17 +99,9 @@
             background: #f8fafc;
             border-radius: 16px;
         }
-        .raw-text {
-            background: #1e1e2e;
-            color: #fff;
-            padding: 16px;
-            border-radius: 12px;
-            font-size: 11px;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            max-height: 300px;
-            display: none;
-            margin-top: 16px;
+        .success-badge {
+            color: #16a34a;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -121,39 +109,35 @@
 <div class="container">
     <div class="header">
         <h1>📄 محول PDF إلى Excel</h1>
-        <p>لجداول العملاء (المستخدمة في عيادات الأسنان)</p>
+        <p>خاص بملفات عيادة الأسنان - تعز</p>
     </div>
     <div class="content">
         <div class="upload-area" id="dropZone">
-            <div style="font-size: 56px; margin-bottom: 12px;">📂</div>
+            <div style="font-size: 56px;">📂</div>
             <div style="font-weight: 600;">اسحب ملف PDF هنا أو انقر للاختيار</div>
-            <div style="font-size: 13px; margin-top: 8px; color: #64748b;">✅ يدعم الملفات: A_MOVMENT_C_ALL_SUMMERY.pdf و A_MOVMENT_SUM4ERY.pdf</div>
+            <div style="font-size: 13px; color: #64748b;">✅ يدعم: A_MOVMENT_C_ALL_SUMMERY.pdf و A_MOVMENT_SUM4ERY.pdf</div>
             <input type="file" id="fileInput" accept=".pdf" style="display: none;">
         </div>
         
         <div class="btn-group">
             <button id="convertBtn" disabled>📊 تصدير إلى Excel</button>
-            <button id="sampleBtn" class="btn-secondary">📋 تحميل بيانات تجريبية</button>
             <button id="clearBtn" class="btn-danger">🗑 مسح</button>
-            <button id="debugBtn" class="btn-secondary" style="background:#334155;">🔍 عرض النص الخام</button>
         </div>
         
         <div id="statusMsg" class="status">✔️ جاهز. اختر ملف PDF.</div>
         
         <div class="preview-table" id="tablePreview">
-            <div style="padding: 50px; text-align: center; color: #94a3b8;">📭 سيظهر الجدول بعد رفع الملف</div>
+            <div style="padding: 50px; text-align: center;">📭 سيظهر الجدول بعد رفع الملف</div>
         </div>
         <div id="statsArea" class="stats" style="display: none;"></div>
-        <div id="rawTextArea" class="raw-text"></div>
     </div>
 </div>
 
 <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
     
-    let extractedData = [];
-    let currentFileName = "";
-    let rawText = "";
+    let clientsData = [];
+    let fileName = "";
     
     function showStatus(msg, type = 'info') {
         const el = document.getElementById('statusMsg');
@@ -161,22 +145,21 @@
         el.className = `status ${type === 'error' ? 'error' : (type === 'success' ? 'success' : '')}`;
     }
     
-    // تحويل الأرقام العربية
-    function toEnglishNumber(str) {
+    function normalizeArabicNumbers(str) {
         if (!str) return "0";
-        const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
-        const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
-        let result = str.toString();
+        const arabic = '٠١٢٣٤٥٦٧٨٩';
+        const persian = '۰۱۲۳۴۵۶۷۸۹';
+        let result = String(str);
         for (let i = 0; i < 10; i++) {
-            result = result.replace(new RegExp(arabicDigits[i], 'g'), i.toString());
-            result = result.replace(new RegExp(persianDigits[i], 'g'), i.toString());
+            result = result.replace(new RegExp(arabic[i], 'g'), String(i));
+            result = result.replace(new RegExp(persian[i], 'g'), String(i));
         }
         return result;
     }
     
-    function parseNumber(str) {
+    function extractNumber(str) {
         if (!str) return 0;
-        let cleaned = toEnglishNumber(str.trim());
+        let cleaned = normalizeArabicNumbers(str.trim());
         cleaned = cleaned.replace(/,/g, '').replace(/٬/g, '');
         let match = cleaned.match(/-?\d+(?:\.\d+)?/);
         if (!match) return 0;
@@ -184,94 +167,114 @@
         return isNaN(num) ? 0 : num;
     }
     
-    // استخراج البيانات من النص الخام باستخدام أنماط متعددة
-    function extractFromRawText(text) {
+    // الخوارزمية المخصصة للملفات
+    function extractClientsFromPDFText(text) {
         const clients = [];
         
-        // النمط 1: مطابقة الصفوف التي تبدأ برقم وتنتهي بثلاثة أرقام
-        // هذا النمط يعمل مع الملف الأول A_MOVMENT_C_ALL_SUMMERY.pdf
-        const pattern1 = /(\d+)\s+([\u0600-\u06FF\u0750-\u077F\s\.\-\(\)\/]+?)\s+(-?[\d,\.]+)\s+(-?[\d,\.]+)\s+(-?[\d,\.]+)/g;
+        // تقسيم النص إلى سطور
+        const lines = text.split(/\r?\n/);
         
-        let match;
-        while ((match = pattern1.exec(text)) !== null) {
-            let clientId = match[1];
-            let name = match[2].trim();
-            let debit = parseNumber(match[3]);
-            let credit = parseNumber(match[4]);
-            let balance = parseNumber(match[5]);
+        // قائمة الكلمات التي يجب تجاهلها
+        const skipWords = ['اجمالي', 'الإجمالي', 'المدير', 'Page', 'تلفون', 'فاكس', 
+                          'تعز', 'الحوبان', 'دنتل', 'العملاء', 'الرصيد الحالي',
+                          'لرصيد', 'دائن', 'مدين', 'الرصيد', 'صفحة', 'طبع بواسطة'];
+        
+        // قائمة الأسماء الصحيحة المسموح بها (للتأكد)
+        const validNames = ['عبدالله', 'ناصر', 'وليد', 'حسن', 'لطف', 'ام', 'محمد', 'مروان',
+                           'فيصل', 'فهمي', 'ادم', 'ناجي', 'عيادة', 'طاهر', 'هارون', 'علي',
+                           'جميل', 'امين', 'هاني', 'زيد', 'منصور', 'عبدالعزيز', 'انور',
+                           'ياسر', 'عاقل', 'صالح', 'صبحي', 'اياد', 'سامي', 'عمار', 'هيثم',
+                           'جواد', 'عمران', 'حامد', 'عدنان', 'عبدالفتاح', 'ماجد', 'توفيق',
+                           'زكي', 'ربيع', 'حميري', 'ايمن', 'بشير', 'حمود', 'مويد', 'ابو',
+                           'الشيخ', 'عليف', 'بزيد', 'عبدالكريم', 'احمد', 'فؤاد', 'رضون',
+                           'ابراهيم', 'عزام', 'حمزه', 'نصر', 'طارق', 'نبيل', 'فتح', 'شرعي',
+                           'كمال', 'شيبان', 'عصام'];
+        
+        for (let line of lines) {
+            line = line.trim();
+            if (line.length < 20) continue;
             
-            // تنظيف الاسم
-            name = name.replace(/\s+/g, ' ').trim();
-            
-            // تجاهل السطور غير المرغوب فيها
-            const skipNames = ['اجمالي', 'الإجمالي', 'الرصيد', 'مدين', 'دائن', 'صفحة', 'Page'];
+            // تخطي السطور التي تحتوي كلمات ممنوعة
             let shouldSkip = false;
-            for (let s of skipNames) {
-                if (name.includes(s) || name === s) {
+            for (let word of skipWords) {
+                if (line.includes(word)) {
                     shouldSkip = true;
                     break;
                 }
             }
+            if (shouldSkip) continue;
             
-            if (!shouldSkip && name.length > 1 && name.length < 80 && clientId.length < 10) {
-                // تجنب التكرار
-                const exists = clients.some(c => c["رقم العميل"] === clientId && c["اسم العميل"] === name);
-                if (!exists) {
-                    clients.push({
-                        "رقم العميل": clientId,
-                        "اسم العميل": name,
-                        "مدين (YER)": debit,
-                        "دائن (YER)": credit,
-                        "الرصيد (YER)": balance
-                    });
-                }
+            // البحث عن نمط: رقم + اسم + أرقام
+            // الملف الأول: "6عبدالله المروسي2,250.000.002,250.00"
+            // الملف الثاني: "6عبدالله المروسي2,250.00 0.00 2,250.00"
+            
+            // استخراج الأرقام أولاً
+            let numbers = [];
+            let numMatches = line.match(/-?\d{1,3}(?:[,٬]\d{3})*(?:\.\d+)?/g);
+            if (numMatches) {
+                numbers = numMatches.map(n => extractNumber(n));
             }
-        }
-        
-        // إذا لم نجد شيئاً، جرب طريقة تقسيم السطور
-        if (clients.length === 0) {
-            const lines = text.split(/\r?\n/);
-            for (let line of lines) {
-                line = line.trim();
-                if (line.length < 15) continue;
+            
+            // استخراج الأرقام متصلة (مثل 2,250.000.002,250.00)
+            let connectedMatch = line.match(/(\d{1,3}(?:[,٬]\d{3})*\.\d{3})(\d{1,3}(?:[,٬]\d{3})*\.\d{2})/);
+            if (connectedMatch && numbers.length < 3) {
+                numbers = [
+                    extractNumber(connectedMatch[1]),
+                    extractNumber(connectedMatch[2]),
+                    0
+                ];
+            }
+            
+            if (numbers.length >= 2) {
+                // محاولة استخراج اسم العميل
+                let name = "";
+                let clientId = "";
                 
-                // تخطي السطور التي تحتوي كلمات ممنوعة
-                if (line.includes('اجمالي') || line.includes('الإجمالي') || 
-                    line.includes('Page') || line.includes('المدير') ||
-                    line.includes('تلفون') || line.includes('فاكس')) {
-                    continue;
+                // البحث عن رقم العميل (بداية السطر)
+                let idMatch = line.match(/^(\d+)/);
+                if (idMatch) {
+                    clientId = idMatch[1];
                 }
                 
-                let parts = line.split(/\s+/);
-                if (parts.length >= 5) {
-                    let firstNum = parseNumber(parts[0]);
-                    if (firstNum > 0 || parts[0] === '0') {
-                        let lastThree = parts.slice(-3);
-                        let nums = lastThree.map(p => parseNumber(p));
-                        if (nums.every(n => !isNaN(n))) {
-                            let nameParts = parts.slice(1, -3);
-                            let name = nameParts.join(' ');
-                            name = name.replace(/[`~!@#$%^&*()_+=[\]{};':"\\|,.<>?]/g, '').trim();
-                            
-                            const skipWords = ['الرصيد', 'مدين', 'دائن', 'اجمالي'];
-                            let isBad = false;
-                            for (let sw of skipWords) {
-                                if (name === sw || name.includes(sw)) {
-                                    isBad = true;
-                                    break;
-                                }
-                            }
-                            
-                            if (!isBad && name.length > 1 && name.length < 80) {
-                                clients.push({
-                                    "رقم العميل": parts[0],
-                                    "اسم العميل": name,
-                                    "مدين (YER)": nums[0],
-                                    "دائن (YER)": nums[1],
-                                    "الرصيد (YER)": nums[2]
-                                });
-                            }
+                // استخراج الاسم (النص بين رقم العميل والأرقام)
+                let afterId = line.replace(/^\d+/, '');
+                if (numbers.length >= 2 && afterId) {
+                    // البحث عن أول رقم في النص المتبقي
+                    let firstNumberIndex = -1;
+                    for (let i = 0; i < afterId.length; i++) {
+                        if ('0123456789٠١٢٣٤٥٦٧٨٩'.includes(afterId[i])) {
+                            firstNumberIndex = i;
+                            break;
                         }
+                    }
+                    if (firstNumberIndex > 0) {
+                        name = afterId.substring(0, firstNumberIndex).trim();
+                    } else {
+                        name = afterId.trim();
+                    }
+                    
+                    // تنظيف الاسم
+                    name = name.replace(/[0-9٠-٩]/g, '').trim();
+                    name = name.replace(/\s+/g, ' ');
+                }
+                
+                // التحقق من صحة الاسم
+                let isValidName = name.length >= 2 && name.length < 60;
+                if (isValidName && clientId && clientId.length < 5) {
+                    let debit = numbers[0] || 0;
+                    let credit = numbers[1] || 0;
+                    let balance = numbers[2] !== undefined ? numbers[2] : debit - credit;
+                    
+                    // تجنب التكرارات
+                    const exists = clients.some(c => c["رقم العميل"] === clientId && c["اسم العميل"] === name);
+                    if (!exists && !name.includes('الرصيد') && !name.includes('مدين')) {
+                        clients.push({
+                            "رقم العميل": clientId,
+                            "اسم العميل": name,
+                            "مدين (YER)": debit,
+                            "دائن (YER)": credit,
+                            "الرصيد (YER)": balance
+                        });
                     }
                 }
             }
@@ -282,7 +285,7 @@
         const seen = new Set();
         for (let c of clients) {
             const key = `${c["رقم العميل"]}|${c["اسم العميل"]}`;
-            if (!seen.has(key)) {
+            if (!seen.has(key) && c["اسم العميل"].length > 1 && !c["اسم العميل"].includes('الرصيد')) {
                 seen.add(key);
                 unique.push(c);
             }
@@ -311,10 +314,7 @@
                 fullText += pageText + '\n';
             }
             
-            rawText = fullText;
-            document.getElementById('rawTextArea').innerHTML = fullText.substring(0, 2000) + '...';
-            
-            let clients = extractFromRawText(fullText);
+            let clients = extractClientsFromPDFText(fullText);
             
             if (clients.length === 0) {
                 showStatus('⚠️ لم يتم العثور على بيانات. تأكد أن الملف يحتوي على جدول عملاء.', 'error');
@@ -324,8 +324,8 @@
                 return false;
             }
             
-            extractedData = clients;
-            currentFileName = file.name.replace(/\.pdf$/i, '');
+            clientsData = clients;
+            fileName = file.name.replace(/\.pdf$/i, '');
             
             displayTable(clients);
             showStatus(`✅ تم استخراج ${clients.length} عميل بنجاح!`, 'success');
@@ -355,7 +355,7 @@
         
         let html = '<table dir="rtl"><thead><tr><th>#</th><th>رقم العميل</th><th>اسم العميل</th><th>مدين (YER)</th><th>دائن (YER)</th><th>الرصيد (YER)</th></tr></thead><tbody>';
         
-        clients.slice(0, 50).forEach((c, idx) => {
+        clients.forEach((c, idx) => {
             html += `<tr>
                         <td>${idx + 1}</td>
                         <td>${escapeHtml(c["رقم العميل"])}</td>
@@ -367,9 +367,6 @@
         });
         
         html += '</tbody></table>';
-        if (clients.length > 50) {
-            html += `<div style="padding: 12px; background: #f8fafc; text-align: center;">+ ${clients.length - 50} صف إضافي</div>`;
-        }
         container.innerHTML = html;
     }
     
@@ -379,7 +376,7 @@
     }
     
     function exportToExcel() {
-        if (!extractedData || extractedData.length === 0) {
+        if (!clientsData || clientsData.length === 0) {
             showStatus('لا توجد بيانات للتصدير', 'error');
             return;
         }
@@ -387,7 +384,7 @@
         const sheetData = [["رقم العميل", "اسم العميل", "مدين (YER)", "دائن (YER)", "الرصيد (YER)"]];
         let totalDebit = 0, totalCredit = 0, totalBalance = 0;
         
-        for (let c of extractedData) {
+        for (let c of clientsData) {
             sheetData.push([c["رقم العميل"], c["اسم العميل"], c["مدين (YER)"], c["دائن (YER)"], c["الرصيد (YER)"]]);
             totalDebit += c["مدين (YER)"];
             totalCredit += c["دائن (YER)"];
@@ -400,52 +397,19 @@
         ws['!cols'] = [{wch:12}, {wch:35}, {wch:16}, {wch:16}, {wch:16}];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "العملاء");
-        XLSX.writeFile(wb, `${currentFileName || "report"}_clients.xlsx`);
+        XLSX.writeFile(wb, `${fileName || "report"}_clients.xlsx`);
         
-        showStatus(`✅ تم التصدير! تم حفظ ${extractedData.length} عميل`, 'success');
-    }
-    
-    function loadSampleData() {
-        extractedData = [
-            {"رقم العميل":"6","اسم العميل":"عبدالله المروسي","مدين (YER)":2250,"دائن (YER)":0,"الرصيد (YER)":2250},
-            {"رقم العميل":"12","اسم العميل":"عبدالله الحكيمي","مدين (YER)":3000,"دائن (YER)":3000,"الرصيد (YER)":-3000},
-            {"رقم العميل":"51","اسم العميل":"ناصر العتمي","مدين (YER)":2500,"دائن (YER)":2000,"الرصيد (YER)":2500},
-            {"رقم العميل":"63","اسم العميل":"وليد الزماني","مدين (YER)":0,"دائن (YER)":2600,"الرصيد (YER)":-2600},
-            {"رقم العميل":"93","اسم العميل":"عبدالله شيبان","مدين (YER)":2400,"دائن (YER)":0,"الرصيد (YER)":2400},
-            {"رقم العميل":"110","اسم العميل":"حسن الطباخ","مدين (YER)":8050,"دائن (YER)":0,"الرصيد (YER)":8050},
-            {"رقم العميل":"146","اسم العميل":"لطف محمد قاسم","مدين (YER)":5820,"دائن (YER)":0,"الرصيد (YER)":5820},
-            {"رقم العميل":"228","اسم العميل":"ام براءه","مدين (YER)":7500,"دائن (YER)":0,"الرصيد (YER)":7500},
-            {"رقم العميل":"311","اسم العميل":"ام محمد ضمانة اختيار","مدين (YER)":3950,"دائن (YER)":0,"الرصيد (YER)":3950},
-            {"رقم العميل":"315","اسم العميل":"محمد نجيب صاحب البطاط","مدين (YER)":5200,"دائن (YER)":0,"الرصيد (YER)":5200},
-            {"رقم العميل":"322","اسم العميل":"مروان سيف","مدين (YER)":200,"دائن (YER)":0,"الرصيد (YER)":200}
-        ];
-        currentFileName = "sample_data";
-        displayTable(extractedData);
-        showStatus(`📋 تم تحميل ${extractedData.length} سجل تجريبي (من الملف الأول الفعلي)`, 'success');
-        document.getElementById('convertBtn').disabled = false;
-        document.getElementById('statsArea').innerHTML = `📊 إجمالي المدين: 39870 | إجمالي الدائن: 7600 | عدد العملاء: ${extractedData.length}`;
-        document.getElementById('statsArea').style.display = 'flex';
+        showStatus(`✅ تم التصدير! تم حفظ ${clientsData.length} عميل`, 'success');
     }
     
     function clearAll() {
-        extractedData = [];
-        currentFileName = "";
-        rawText = "";
+        clientsData = [];
+        fileName = "";
         document.getElementById('tablePreview').innerHTML = '<div style="padding: 50px; text-align: center;">📭 تم المسح، اختر ملف PDF جديد</div>';
         document.getElementById('statsArea').style.display = 'none';
         document.getElementById('convertBtn').disabled = true;
         document.getElementById('fileInput').value = '';
-        document.getElementById('rawTextArea').style.display = 'none';
         showStatus('🗑️ تم مسح جميع البيانات.', 'info');
-    }
-    
-    function toggleRawText() {
-        const el = document.getElementById('rawTextArea');
-        if (el.style.display === 'none') {
-            el.style.display = 'block';
-        } else {
-            el.style.display = 'none';
-        }
     }
     
     // الأحداث
@@ -479,9 +443,7 @@
     });
     
     document.getElementById('convertBtn').addEventListener('click', exportToExcel);
-    document.getElementById('sampleBtn').addEventListener('click', loadSampleData);
     document.getElementById('clearBtn').addEventListener('click', clearAll);
-    document.getElementById('debugBtn').addEventListener('click', toggleRawText);
 </script>
 </body>
 </html>
